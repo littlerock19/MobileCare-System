@@ -16,8 +16,9 @@ A desktop application built with **C# (.NET)** and **Microsoft SQL Server** desi
    - Track full device lifecycle (`Received`, `InProgress`, `Completed`, `Delivered`, `Cancelled`).
    - Record customer details, device IMEI/serial, and included accessories (charger, case, SIM tray, etc.).
    - Capture and attach **Before & After** device photos (stored on disk/shared folder; file paths saved in SQL Server).
-3. **Damaged Parts Tracking (Repair Waste):**
-   - Separate valid parts billed to the customer from parts damaged during installation (`IsDamaged` flag) to maintain accurate inventory deduction and net profit calculation.
+3. Damaged & Defective Parts Tracking (Repair Waste & Part Quality):
+  - Distinguish between Valid parts (billed to customer), Technician-Damaged parts (installation waste; deducted from stock and ticket net profit), and Factory-Defective / DOA parts (faulty units per part type/grade; excluded from technician commission penalty).
+  - Track factory defect count, losses, and defect rate per spare part type/grade (e.g., Incell X vs. Original) without supplier tracking, to evaluate part quality.
 4. **Technician Payroll & Commissions:**
    - Automatically calculate technician earnings based on a configurable percentage of net repair profit.
 5. **Accessories POS & Sales Reporting:**
