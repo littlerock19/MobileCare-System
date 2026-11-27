@@ -5,7 +5,8 @@
    Description  : Inserts initial production lookup data (Roles, PaymentMethods,
                   Admin user) and comprehensive test scenarios covering M:N part
                   compatibility, split payments, valid/damaged/defective parts,
-                  rare ticket-linked external parts, POS sales, and expenses.
+                  separate profit & damage liability rates, rare external parts,
+                  POS sales, and expenses.
    ============================================================================ */
 
 SET NOCOUNT ON;
@@ -44,14 +45,16 @@ VALUES
     (N'VodafoneCash', 1),
     (N'Card',         1);
 
--- 1.3 Users (IDs: 1 = Admin, 2 = Sales, 3 = Tech 40%, 4 = Tech 35%)
+-- 1.3 Users
+-- Tech 1 (Mahmoud): 40% Profit Commission, 50% Damage Liability
+-- Tech 2 (Kareem) : 35% Profit Commission, 100% Damage Liability
 -- Note: Replace placeholder PasswordHash values with real BCrypt/PBKDF2 hashes from C#
-INSERT INTO dbo.Users (FullName, Username, PasswordHash, RoleID, CommissionRate, IsActive)
+INSERT INTO dbo.Users (FullName, Username, PasswordHash, RoleID, CommissionRate, DamageLiabilityRate, IsActive)
 VALUES
-    (N'مصطفى زلط',   N'admin',        N'PLACEHOLDER_HASH_ADMIN_123', 1,  0.00, 1),
-    (N'أحمد سامي',   N'sales_ahmed',  N'PLACEHOLDER_HASH_SALES_123', 2,  0.00, 1),
-    (N'محمود حسن',   N'tech_mahmoud', N'PLACEHOLDER_HASH_TECH1_123', 3, 40.00, 1),
-    (N'كريم عادل',   N'tech_kareem',  N'PLACEHOLDER_HASH_TECH2_123', 3, 35.00, 1);
+    (N'مصطفى زلط',   N'admin',        N'PLACEHOLDER_HASH_ADMIN_123', 1,  0.00,   0.00, 1),
+    (N'أحمد سامي',   N'sales_ahmed',  N'PLACEHOLDER_HASH_SALES_123', 2,  0.00,   0.00, 1),
+    (N'محمود حسن',   N'tech_mahmoud', N'PLACEHOLDER_HASH_TECH1_123', 3, 40.00,  50.00, 1),
+    (N'كريم عادل',   N'tech_kareem',  N'PLACEHOLDER_HASH_TECH2_123', 3, 35.00, 100.00, 1);
 
 -- 1.4 Customers (IDs: 1, 2, 3)
 INSERT INTO dbo.Customers (FullName, Phone, Notes)
@@ -64,7 +67,7 @@ VALUES
    2. SHARED INVENTORY & M:N COMPATIBILITY (Categories, PhoneModels, Items)
    ============================================================================ */
 
--- 2.1 Categories (IDs: 1 = Screens, 2 = Batteries, 3 = Charging Flex, 4 = Cases & Protectors, 5 = Chargers & Cables)
+-- 2.1 Categories (IDs: 1..5)
 INSERT INTO dbo.Categories (CategoryName, IsActive)
 VALUES
     (N'شاشات',            1),
@@ -107,23 +110,24 @@ VALUES
 INSERT INTO dbo.RepairTickets (
     TicketCode, CustomerID, PhoneModelID, DeviceIMEI, IssueDescription,
     IncludedAccessories, AssignedTechID, ReceivedByUserID, Status,
-    AgreedPrice, Discount, TechCommissionRateAtTime, CreatedAt, CompletedAt, DeliveredAt
+    AgreedPrice, Discount, TechCommissionRateAtTime, TechDamageRateAtTime,
+    CreatedAt, CompletedAt, DeliveredAt
 )
 VALUES
-    -- Ticket 1000: Delivered (Status=4), tests Valid + TechDamaged + FactoryDefect parts & split payments
+    -- Ticket 1000: Delivered (Status=4), tests Valid + TechDamaged + FactoryDefect parts & split rates (40% profit / 50% damage)
     (
         N'TKT-2026-1000', 1, 2, N'354892104567891',
         N'كسر في الشاشة الأمامية وتغيير شاشة Incell X',
         N'جراب شفاف + بيت الخط', 3, 2, 4,
-        1800.00, 100.00, 40.00,
+        1800.00, 100.00, 40.00, 50.00,
         DATEADD(HOUR, -5, GETDATE()), DATEADD(HOUR, -2, GETDATE()), DATEADD(HOUR, -1, GETDATE())
     ),
-    -- Ticket 1001: Completed (Status=3), tests rare external part (not in Items) + Expense link
+    -- Ticket 1001: Completed (Status=3), tests rare external part (not in Items) + Expense link (35% profit / 100% damage)
     (
         N'TKT-2026-1001', 3, 5, N'864219053312450',
         N'تغيير شاشة Honor X9a أصلية (توريد خارجي خاص بالتذكرة)',
         N'بدون مشتملات', 4, 2, 3,
-        1500.00, 0.00, 35.00,
+        1500.00, 0.00, 35.00, 100.00,
         DATEADD(HOUR, -4, GETDATE()), DATEADD(MINUTE, -30, GETDATE()), NULL
     ),
     -- Ticket 1002: InProgress (Status=2), tests active ticket with initial deposit
@@ -131,7 +135,7 @@ VALUES
         N'TKT-2026-1002', 2, 4, N'359812094481230',
         N'ضعف البطارية وتغيير بطارية iPhone 13',
         N'كابل شحن', 3, 2, 2,
-        1200.00, 0.00, 40.00,
+        1200.00, 0.00, 40.00, 50.00,
         DATEADD(HOUR, -1, GETDATE()), NULL, NULL
     );
 
@@ -148,7 +152,7 @@ INSERT INTO dbo.TicketParts (
     TicketID, ItemID, ExternalPartName, Quantity, UnitCostAtTime, PartStatus, LoggedByUserID, Notes
 )
 VALUES
-    -- Ticket 1000: 1 FactoryDefect (excluded from tech penalty), 1 TechDamaged, 1 Valid
+    -- Ticket 1000: 1 FactoryDefect (excluded from tech penalty), 1 TechDamaged (50% liability), 1 Valid
     (1000, 2,    NULL,                                                1, 650.00, 3, 3, N'خطوط عرضية عند التجربة - عيب مصنع'),
     (1000, 2,    NULL,                                                1, 650.00, 2, 3, N'انكسرت الفلاتة أثناء التقفيل - تالف فني'),
     (1000, 2,    NULL,                                                1, 650.00, 1, 3, N'تم التركيب والاختبار بنجاح'),
@@ -255,19 +259,31 @@ LEFT JOIN (
     GROUP BY PaymentMethodID
 ) e ON e.PaymentMethodID = pm.PaymentMethodID;
 
--- Check 3: Ticket Profit & Technician Commission Calculation (Excludes PartStatus = 3 FactoryDefect)
+-- Check 3: Ticket Profit & Split Technician Earnings (Separate Profit Share vs. Damage Penalty)
 SELECT
     rt.TicketCode,
     u.FullName AS TechnicianName,
     rt.NetTotal,
-    ISNULL(SUM(CASE WHEN tp.PartStatus IN (1, 2) THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00) AS BillablePartsCost,
-    rt.NetTotal - ISNULL(SUM(CASE WHEN tp.PartStatus IN (1, 2) THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00) AS TicketNetProfit,
+    ISNULL(SUM(CASE WHEN tp.PartStatus = 1 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00) AS ValidPartsCost,
+    ISNULL(SUM(CASE WHEN tp.PartStatus = 2 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00) AS TechDamagedCost,
+    rt.NetTotal - ISNULL(SUM(CASE WHEN tp.PartStatus = 1 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00) AS GrossTicketProfit,
     CAST(
-        (rt.NetTotal - ISNULL(SUM(CASE WHEN tp.PartStatus IN (1, 2) THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00))
+        (rt.NetTotal - ISNULL(SUM(CASE WHEN tp.PartStatus = 1 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00))
         * (rt.TechCommissionRateAtTime / 100.0)
-    AS DECIMAL(18,2)) AS TechCommissionAmount
+    AS DECIMAL(18,2)) AS TechProfitShare,
+    CAST(
+        ISNULL(SUM(CASE WHEN tp.PartStatus = 2 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00)
+        * (rt.TechDamageRateAtTime / 100.0)
+    AS DECIMAL(18,2)) AS TechDamagePenalty,
+    CAST(
+        ((rt.NetTotal - ISNULL(SUM(CASE WHEN tp.PartStatus = 1 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00))
+         * (rt.TechCommissionRateAtTime / 100.0))
+        -
+        (ISNULL(SUM(CASE WHEN tp.PartStatus = 2 THEN tp.Quantity * tp.UnitCostAtTime ELSE 0.00 END), 0.00)
+         * (rt.TechDamageRateAtTime / 100.0))
+    AS DECIMAL(18,2)) AS NetTechEarnings
 FROM dbo.RepairTickets rt
 LEFT JOIN dbo.Users u ON u.UserID = rt.AssignedTechID
 LEFT JOIN dbo.TicketParts tp ON tp.TicketID = rt.TicketID
-GROUP BY rt.TicketCode, u.FullName, rt.NetTotal, rt.TechCommissionRateAtTime;
+GROUP BY rt.TicketCode, u.FullName, rt.NetTotal, rt.TechCommissionRateAtTime, rt.TechDamageRateAtTime;
 GO

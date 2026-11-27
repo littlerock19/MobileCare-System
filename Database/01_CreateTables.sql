@@ -46,22 +46,24 @@ CREATE TABLE dbo.PaymentMethods (
 );
 GO
 
--- 1.3 Users
+-- 1.3 Users (Includes separate Profit Commission Rate & Damage Liability Rate)
 CREATE TABLE dbo.Users (
-    UserID          INT IDENTITY(1,1)   NOT NULL,
-    FullName        NVARCHAR(100)       NOT NULL,
-    Username        NVARCHAR(50)        NOT NULL,
-    PasswordHash    NVARCHAR(255)       NOT NULL,
-    RoleID          INT                 NOT NULL,
-    CommissionRate  DECIMAL(5,2)        NOT NULL CONSTRAINT DF_Users_CommissionRate DEFAULT (0.00),
-    IsActive        BIT                 NOT NULL CONSTRAINT DF_Users_IsActive DEFAULT (1),
-    CreatedAt       DATETIME2(0)        NOT NULL CONSTRAINT DF_Users_CreatedAt DEFAULT (GETDATE()),
+    UserID              INT IDENTITY(1,1)   NOT NULL,
+    FullName            NVARCHAR(100)       NOT NULL,
+    Username            NVARCHAR(50)        NOT NULL,
+    PasswordHash        NVARCHAR(255)       NOT NULL,
+    RoleID              INT                 NOT NULL,
+    CommissionRate      DECIMAL(5,2)        NOT NULL CONSTRAINT DF_Users_CommissionRate DEFAULT (0.00),
+    DamageLiabilityRate DECIMAL(5,2)        NOT NULL CONSTRAINT DF_Users_DamageLiabilityRate DEFAULT (0.00),
+    IsActive            BIT                 NOT NULL CONSTRAINT DF_Users_IsActive DEFAULT (1),
+    CreatedAt           DATETIME2(0)        NOT NULL CONSTRAINT DF_Users_CreatedAt DEFAULT (GETDATE()),
 
     CONSTRAINT PK_Users PRIMARY KEY CLUSTERED (UserID),
     CONSTRAINT UQ_Users_Username UNIQUE (Username),
     CONSTRAINT FK_Users_Roles FOREIGN KEY (RoleID)
         REFERENCES dbo.Roles(RoleID) ON DELETE NO ACTION,
-    CONSTRAINT CK_Users_CommissionRate CHECK (CommissionRate BETWEEN 0.00 AND 100.00)
+    CONSTRAINT CK_Users_CommissionRate CHECK (CommissionRate BETWEEN 0.00 AND 100.00),
+    CONSTRAINT CK_Users_DamageLiabilityRate CHECK (DamageLiabilityRate BETWEEN 0.00 AND 100.00)
 );
 GO
 
@@ -180,6 +182,7 @@ CREATE TABLE dbo.RepairTickets (
     Discount                    DECIMAL(18,2)           NOT NULL CONSTRAINT DF_RepairTickets_Discount DEFAULT (0.00),
     NetTotal                    AS CAST((AgreedPrice - Discount) AS DECIMAL(18,2)) PERSISTED,
     TechCommissionRateAtTime    DECIMAL(5,2)            NOT NULL CONSTRAINT DF_RepairTickets_TechCommRate DEFAULT (0.00),
+    TechDamageRateAtTime        DECIMAL(5,2)            NOT NULL CONSTRAINT DF_RepairTickets_TechDamageRate DEFAULT (0.00),
     CreatedAt                   DATETIME2(0)            NOT NULL CONSTRAINT DF_RepairTickets_CreatedAt DEFAULT (GETDATE()),
     CompletedAt                 DATETIME2(0)            NULL,
     DeliveredAt                 DATETIME2(0)            NULL,
@@ -198,6 +201,7 @@ CREATE TABLE dbo.RepairTickets (
     CONSTRAINT CK_RepairTickets_AgreedPrice CHECK (AgreedPrice >= 0.00),
     CONSTRAINT CK_RepairTickets_Discount CHECK (Discount >= 0.00 AND Discount <= AgreedPrice),
     CONSTRAINT CK_RepairTickets_TechCommRate CHECK (TechCommissionRateAtTime BETWEEN 0.00 AND 100.00),
+    CONSTRAINT CK_RepairTickets_TechDamageRate CHECK (TechDamageRateAtTime BETWEEN 0.00 AND 100.00),
     CONSTRAINT CK_RepairTickets_TechRequiredWhenDone CHECK (Status NOT IN (3, 4) OR AssignedTechID IS NOT NULL),
     CONSTRAINT CK_RepairTickets_CompletedAt CHECK (Status NOT IN (3, 4) OR CompletedAt IS NOT NULL),
     CONSTRAINT CK_RepairTickets_DeliveredAt CHECK (Status <> 4 OR DeliveredAt IS NOT NULL)
